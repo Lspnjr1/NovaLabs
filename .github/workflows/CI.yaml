@@ -14,6 +14,102 @@ defaults:
     working-directory: contracts # all cargo commands run in contracts/
 
 jobs:
+  # ─────────────────────────────────────────────
+  # SUPPLY CHAIN — Registry Validation
+  # ─────────────────────────────────────────────
+  registry-check:
+    name: Registry Validation (Supply Chain)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify npm registry configuration
+        run: |
+          echo "Checking .npmrc files for explicit registry settings..."
+
+          # Check root .npmrc
+          if [ ! -f .npmrc ]; then
+            echo "::error::.npmrc not found in root directory"
+            exit 1
+          fi
+
+          if ! grep -q "registry=https://registry.npmjs.org/" .npmrc; then
+            echo "::error::Root .npmrc missing explicit registry=https://registry.npmjs.org/"
+            exit 1
+          fi
+
+          # Check backend .npmrc
+          if [ ! -f backend/.npmrc ]; then
+            echo "::error::backend/.npmrc not found"
+            exit 1
+          fi
+
+          if ! grep -q "registry=https://registry.npmjs.org/" backend/.npmrc; then
+            echo "::error::backend/.npmrc missing explicit registry=https://registry.npmjs.org/"
+            exit 1
+          fi
+
+          # Check frontend .npmrc
+          if [ ! -f frontend/.npmrc ]; then
+            echo "::error::frontend/.npmrc not found"
+            exit 1
+          fi
+
+          if ! grep -q "registry=https://registry.npmjs.org/" frontend/.npmrc; then
+            echo "::error::frontend/.npmrc missing explicit registry=https://registry.npmjs.org/"
+            exit 1
+          fi
+
+          echo "✓ All .npmrc files have explicit registry configuration"
+        working-directory: .
+
+      - name: Verify Cargo registry configuration
+        run: |
+          echo "Checking Cargo registry configuration..."
+
+          # Check contracts/.cargo/config.toml exists
+          if [ ! -f contracts/.cargo/config.toml ]; then
+            echo "::error::contracts/.cargo/config.toml not found"
+            exit 1
+          fi
+
+          # Verify it restricts to crates.io
+          if ! grep -q "crates-io" contracts/.cargo/config.toml; then
+            echo "::error::contracts/.cargo/config.toml missing crates-io registry configuration"
+            exit 1
+          fi
+
+          echo "✓ Cargo registry configuration is valid"
+        working-directory: .
+
+      - name: Check for unauthorized registries in package-lock.json
+        run: |
+          echo "Scanning package-lock.json files for unauthorized registries..."
+
+          UNAUTHORIZED=0
+
+          for lockfile in backend/package-lock.json frontend/package-lock.json; do
+            if [ -f "$lockfile" ]; then
+              # Check for any resolved URLs that aren't from npmjs.org
+              if grep -E '"resolved":\s*"https?://' "$lockfile" | grep -v "registry.npmjs.org" | grep -v "registry.npmmirror.com" > /dev/null 2>&1; then
+                echo "::warning::Found non-npmjs.org registry in $lockfile"
+                grep -E '"resolved":\s*"https?://' "$lockfile" | grep -v "registry.npmjs.org" | head -5
+                UNAUTHORIZED=1
+              fi
+            fi
+          done
+
+          if [ "$UNAUTHORIZED" -eq 1 ]; then
+            echo "::error::Unauthorized registries detected in package-lock.json files"
+            echo "Please ensure all dependencies are from https://registry.npmjs.org/"
+            exit 1
+          fi
+
+          echo "✓ No unauthorized registries found in package-lock.json files"
+        working-directory: .
+
   format:
     name: Format Check
     runs-on: ubuntu-latest
