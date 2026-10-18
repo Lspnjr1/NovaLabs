@@ -1,0 +1,19 @@
+# Dependency Confusion Mitigation
+# Restrict cargo to only use crates.io to prevent supply-chain attacks
+# See: https://github.com/ossillate-inc/security-advisories/security/advisories/GHSA-7p7v-2gqg-qmj2
+
+[registries]
+# Define crates.io as the only allowed registry
+crates-io = { index = "https://github.com/rust-lang/crates.io-index" }
+
+[registry]
+# Set crates.io as the default registry
+default = "crates-io"
+
+[net]
+# Require cargo to use git for fetching crate indexes (more secure)
+git-fetch-with-cli = true
+
+[source.crates-io]
+# Use sparse protocol for faster and more secure index fetching
+registry = "sparse+https://index.crates.io/"
